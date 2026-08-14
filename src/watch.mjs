@@ -26,13 +26,17 @@ export function startWatch(config) {
 }
 
 function restoreState() {
-  const st = loadState();
-  if (!st) return;
-  for (const [k, v] of Object.entries(st.seenSigs ?? {})) seen.set(k, v);
-  pairs.load(st.pairCounts);
-  loadFunderCache(st.funderCache);
-  loadFunderState(st.funders);
-  console.log(`state restored: ${seen.size} wallet cursor(s) — catching up, not re-baselining`);
+  try {
+    const st = loadState();
+    if (!st) return;
+    for (const [k, v] of Object.entries(st.seenSigs ?? {})) seen.set(k, v);
+    pairs.load(st.pairCounts);
+    loadFunderCache(st.funderCache);
+    loadFunderState(st.funders);
+    console.log(`state restored: ${seen.size} wallet cursor(s) — catching up, not re-baselining`);
+  } catch (e) {
+    console.error('state restore failed, starting clean:', e.message);
+  }
 }
 
 function persistState() {

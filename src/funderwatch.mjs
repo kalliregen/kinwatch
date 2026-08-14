@@ -8,6 +8,7 @@ import { sendAlert } from './telegram.mjs';
 
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 const MAX_FUNDERS = 10; // RPC budget guard
+const TX_BUDGET_PER_POLL = 20; // total tx checks across all funders per poll; the rest defers
 const ALERTED_MAX = 1000;
 
 const cursors = new Map(); // funder -> newest processed signature (null until baselined)
@@ -25,6 +26,7 @@ export function watchFunder(funder) {
 }
 
 export async function pollFunders(knownWallets) {
+  let budget = TX_BUDGET_PER_POLL;
   for (const [funder, newest] of cursors) {
     try {
       if (newest === null) {
@@ -34,16 +36,29 @@ export async function pollFunders(knownWallets) {
       }
       const { sigs, complete } = await fetchFresh(funder, newest);
       if (!sigs.length) continue;
-      cursors.set(funder, sigs[0].signature);
       if (!complete) console.log(`note: funder ${short(funder)} had more new txs than the page cap; oldest were skipped`);
-      for (const s of sigs.reverse()) {
-        if (s.err) continue;
-        await checkFundingTx(funder, s.signature, knownWallets);
+      // Oldest first; the cursor only advances past processed signatures,
+      // so a budget cut or a single failed lookup never drops the tail —
+      // it is re-fetched on the next poll.
+      let lastProcessed = null;
+      for (const s of [...sigs].reverse()) {
+        if (!s.err) {
+          if (budget <= 0) break;
+          budget--;
+          try {
+            await checkFundingTx(funder, s.signature, knownWallets);
+          } catch (e) {
+            console.error(`funding tx check failed for ${s.signature.slice(0, 16)}…:`, e.message);
+          }
+        }
+        lastProcessed = s.signature;
       }
+      if (lastProcessed) cursors.set(funder, lastProcessed);
     } catch (e) {
       console.error(`funder poll failed for ${short(funder)}:`, e.message);
     }
   }
+  if (budget <= 0) console.log('note: funder watch tx budget reached; the rest defers to the next poll');
 }
 
 async function checkFundingTx(funder, signature, knownWallets) {
@@ -54,9 +69,11 @@ async function checkFundingTx(funder, signature, knownWallets) {
   if (!tx?.transaction) return;
   for (const dest of solRecipients(tx, funder)) {
     if (dest === funder || knownWallets.has(dest) || cursors.has(dest) || alerted.has(dest)) continue;
+    const plain = await isPlainWallet(dest);
+    if (plain === null) continue; // transient RPC failure — recheck when seen again
     if (alerted.size >= ALERTED_MAX) alerted.clear();
-    alerted.add(dest); // one alert per destination, even if the owner check fails
-    if (!(await isPlainWallet(dest))) continue; // program/token accounts are not fresh wallets
+    alerted.add(dest); // definitive answer — one report per destination
+    if (!plain) continue; // program/token accounts are not fresh wallets
     await sendAlert(
       `🕸 funder activity: ${short(funder)} sent SOL to new wallet ${short(dest)} — possible cluster member being provisioned\n` +
       `https://solscan.io/account/${dest}\nhttps://solscan.io/tx/${signature}`
@@ -66,14 +83,16 @@ async function checkFundingTx(funder, signature, knownWallets) {
 
 // A freshly provisioned wallet is a plain system-owned account; transfers
 // to program-owned accounts (token accounts, pool PDAs) are the funder's
-// own trading, not wallet provisioning.
+// own trading, not wallet provisioning. Returns null when the check
+// itself failed, so the caller does not confuse an RPC error with a
+// confirmed program account.
 async function isPlainWallet(address) {
   try {
     const info = await rpc('getAccountInfo', [address, { encoding: 'base64' }]);
     return info?.value?.owner === SYSTEM_PROGRAM;
   } catch (e) {
     console.error(`owner check failed for ${short(address)}:`, e.message);
-    return false;
+    return null;
   }
 }
 
@@ -102,7 +121,7 @@ export function dumpFunderState() {
 
 export function loadFunderState(st) {
   for (const [k, v] of Object.entries(st?.cursors ?? {})) cursors.set(k, v);
-  for (const a of st?.alerted ?? []) alerted.add(a);
+  for (const a of Array.isArray(st?.alerted) ? st.alerted : []) alerted.add(a);
 }
 
 const short = (a) => a.slice(0, 4) + '…' + a.slice(-4);
