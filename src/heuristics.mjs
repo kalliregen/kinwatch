@@ -22,9 +22,10 @@ export async function mintsTouched(signature) {
     encoding: 'jsonParsed',
     maxSupportedTransactionVersion: 0,
   }]);
-  const balances = tx?.meta
-    ? [...(tx.meta.preTokenBalances ?? []), ...(tx.meta.postTokenBalances ?? [])]
-    : [];
+  // A null tx usually means the RPC has not indexed it yet — do not cache,
+  // so the next poll asks again while the event is still buffered.
+  if (!tx?.meta) return [];
+  const balances = [...(tx.meta.preTokenBalances ?? []), ...(tx.meta.postTokenBalances ?? [])];
   const mints = [...new Set(balances.map((b) => b.mint).filter((m) => m && m !== WSOL))];
   if (mintCache.size >= MINT_CACHE_MAX) mintCache.clear();
   mintCache.set(signature, mints);

@@ -22,6 +22,14 @@ if (!Number.isFinite(config.pollIntervalSec) || config.pollIntervalSec <= 0) {
   process.exit(1);
 }
 
+const windowSec = config.alerts?.coordinatedWindowSec ?? 120;
+if (config.pollIntervalSec >= windowSec) {
+  console.warn(
+    `warning: pollIntervalSec (${config.pollIntervalSec}) should be well below ` +
+    `coordinatedWindowSec (${windowSec}), or coordination windows may be missed`
+  );
+}
+
 console.log(`kinwatch: watching ${config.wallets.length} wallet(s), poll every ${config.pollIntervalSec}s`);
 await sendAlert(`kinwatch started: watching ${config.wallets.length} wallet(s)`);
 startWatch(config);
