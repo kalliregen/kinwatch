@@ -20,11 +20,14 @@ export async function traceFunder(wallet) {
   let oldest;
   for (let page = 0; page < MAX_PAGES; page++) {
     const sigs = await rpc('getSignaturesForAddress', [wallet, { limit: 1000, before }]);
-    if (!sigs.length) break;
-    oldest = sigs[sigs.length - 1];
-    before = oldest.signature;
+    // Short or empty page — we have reached the start of the history.
+    // (Empty happens when the history is an exact multiple of the page size.)
+    if (sigs.length) {
+      oldest = sigs[sigs.length - 1];
+      before = oldest.signature;
+    }
     if (sigs.length < 1000) {
-      const result = await funderFromTx(wallet, oldest.signature);
+      const result = oldest ? await funderFromTx(wallet, oldest.signature) : null;
       funderCache.set(wallet, result);
       return result;
     }

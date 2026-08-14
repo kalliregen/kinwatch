@@ -1,8 +1,6 @@
 # Kinwatch
 
-Kinwatch is a read-only Solana watchdog. It monitors a configured wallet list, detects activity within the same time window, and sends Telegram alerts with transaction links.
-
-The watcher, baseline coordination alerts and funding-chain tracing work now. Broader coordination heuristics and a demo are in progress.
+Kinwatch is a read-only Solana watchdog. It monitors a configured wallet list, detects coordinated activity, traces funding links, and sends Telegram alerts with transaction links. No private keys, no transactions — observation only.
 
 ## Quickstart
 
@@ -16,14 +14,47 @@ npm start
 
 Node.js only. No runtime dependencies.
 
+## How detection works
+
+Kinwatch polls `getSignaturesForAddress` for each watched wallet. The first pass records a baseline; after that, every new transaction becomes an event. Four heuristics run on top:
+
+1. **Time window.** Two or more watched wallets active within `coordinatedWindowSec` of each other trigger a coordination alert. This is the base signal — cheap and unconditional.
+2. **Same token.** For events inside a flagged window, Kinwatch fetches the transactions and extracts the token mints they touched (wrapped SOL excluded). Two or more wallets touching the same mint in one window is the classic signature of coordinated trading, and gets its own alert. Transaction lookups are capped per window to bound RPC cost.
+3. **Recurring pairs.** One co-occurrence can be chance. Kinwatch counts how many coordination windows each wallet pair has shared and alerts once when a pair reaches `repeatPairThreshold`.
+4. **Shared funder (kin clusters).** Each wallet's history is walked back to its earliest transaction, and that transaction's fee payer is taken as the funding source. Watched wallets sharing a funding source form a "kin" cluster. The attribution is a heuristic (fee payer of earliest credit) and alerts label it as such; wallets whose history is deeper than the pagination cap resolve to *unknown* rather than guessing.
+
+All alerts go to Telegram when a bot is configured, otherwise to the console. RPC calls retry with exponential backoff on rate limits, so the default public endpoint works out of the box.
+
+## Demo
+
+Replay a real coordinated buy from mainnet history — six wallets that bought the same pump.fun token within one second, traced back to their funding sources (five of them resolve to a single shared funder):
+
+```bash
+npm run demo
+```
+
+```
+  ⚠ coordinated activity: 6 wallets within 0s (window 120s)
+  🎯 same-token trading: 6 wallets touched one mint
+     https://solscan.io/token/3Vq2…g2UU
+
+  👥 kin cluster: 5 wallets share funding source BY4S…BEcx
+     https://solscan.io/account/BY4S…BEcx
+```
+
+The demo uses public on-chain data and needs an RPC that serves historical transactions. The default public endpoint (`api.mainnet-beta.solana.com`) does; some free RPCs prune old history and will report the transactions as not found.
+
 ## Configuration
 
 `config.json`:
 
 - `wallets`: Solana addresses to monitor
 - `pollIntervalSec`: RPC polling interval, in seconds
+- `alerts.newTransaction`: alert on every new transaction
 - `alerts.coordinatedWindowSec`: time window for coordination detection
-- `alerts.newTransaction`, `alerts.sharedFunder`: alert toggles
+- `alerts.sameToken`: check flagged windows for same-mint trading
+- `alerts.repeatPairThreshold`: co-occurrence count that flags a recurring pair
+- `alerts.sharedFunder`: trace funding links for wallets in flagged windows
 
 `.env`:
 
@@ -36,8 +67,8 @@ Without Telegram credentials, alerts are written to the console.
 ## Roadmap
 
 - M1: Wallet watcher and Telegram alerts — complete
-- M2: Funding-chain tracing and shared-funder "kin" clusters — complete. The funder is attributed as the fee payer of the wallet's earliest credit (a heuristic, labeled as such in alerts); wallets whose history is deeper than the pagination cap resolve to unknown instead of guessing.
-- M3: Expanded coordination heuristics, documentation, and demo — in progress
+- M2: Funding-chain tracing and shared-funder "kin" clusters — complete
+- M3: Expanded coordination heuristics (same-token, recurring pairs), documentation, and demo — complete
 
 ## License
 

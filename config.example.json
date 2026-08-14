@@ -7,6 +7,8 @@
   "alerts": {
     "newTransaction": true,
     "sharedFunder": true,
-    "coordinatedWindowSec": 120
+    "sameToken": true,
+    "coordinatedWindowSec": 120,
+    "repeatPairThreshold": 3
   }
 }

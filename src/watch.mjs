@@ -1,9 +1,11 @@
 // Polling watcher: pulls new signatures for each wallet, hands them to analysis.
 import { rpc } from './rpc.mjs';
 import { checkSharedFunder } from './funding.mjs';
+import { sameTokenGroups, PairTracker } from './heuristics.mjs';
 import { sendAlert } from './telegram.mjs';
 
 const seen = new Map(); // wallet -> newest signature we already processed
+const pairs = new PairTracker();
 
 export function startWatch(config) {
   const tick = async () => {
@@ -49,11 +51,31 @@ async function pollOnce(config) {
     const wallets = [...new Set(group.map(e => e.wallet))];
     if (wallets.length < 2) continue;
     await sendAlert(`⚠ coordinated activity: ${wallets.length} watched wallets active within ${windowSec}s\n${wallets.map(short).join('\n')}`);
+
+    // Same-token: did the wallets in this window touch one mint?
+    if (config.alerts.sameToken) {
+      const groups = await sameTokenGroups(group.slice(0, 10)); // cap RPC cost per window
+      for (const g of groups) {
+        await sendAlert(
+          `🎯 same-token trading: ${g.wallets.length} watched wallets touched one mint within ${windowSec}s\n` +
+          `${g.wallets.map(short).join('\n')}\nhttps://solscan.io/token/${g.mint}`
+        );
+      }
+    }
+
+    // Recurring pairs: same two wallets showing up in windows repeatedly.
+    const threshold = config.alerts.repeatPairThreshold ?? 3;
+    for (const p of pairs.record(wallets, threshold)) {
+      await sendAlert(
+        `🔁 recurring pair: ${p.wallets.map(short).join(' + ')} co-active in ${p.count} coordination windows`
+      );
+    }
+
     if (config.alerts.sharedFunder) await checkSharedFunder(wallets);
   }
 }
 
-function groupByWindow(events, windowSec) {
+export function groupByWindow(events, windowSec) {
   const timed = events.filter(e => e.blockTime).sort((a, b) => a.blockTime - b.blockTime);
   const groups = [];
   let cur = [];
