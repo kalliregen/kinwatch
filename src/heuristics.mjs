@@ -73,4 +73,12 @@ export class PairTracker {
     }
     return reached;
   }
+
+  dump() {
+    return Object.fromEntries(this.#counts);
+  }
+
+  load(obj) {
+    for (const [k, v] of Object.entries(obj ?? {})) this.#counts.set(k, v);
+  }
 }

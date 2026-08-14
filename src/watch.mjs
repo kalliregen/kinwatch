@@ -1,43 +1,47 @@
 // Polling watcher: pulls new signatures for each wallet, hands them to analysis.
 import { rpc } from './rpc.mjs';
-import { checkSharedFunder } from './funding.mjs';
+import { checkSharedFunder, dumpFunderCache, loadFunderCache } from './funding.mjs';
 import { sameTokenGroups, PairTracker } from './heuristics.mjs';
+import { watchFunder, pollFunders, dumpFunderState, loadFunderState } from './funderwatch.mjs';
+import { fetchFresh, PAGE_LIMIT, MAX_POLL_PAGES } from './sigfetch.mjs';
+import { loadState, saveState } from './state.mjs';
 import { sendAlert } from './telegram.mjs';
-
-const PAGE_LIMIT = 25;
-const MAX_POLL_PAGES = 4; // per wallet per poll; a deeper burst is reported as truncated
 
 const seen = new Map(); // wallet -> newest signature we already processed
 const pairs = new PairTracker();
 const recent = []; // event buffer kept across polls, so windows spanning two polls are caught
 
 export function startWatch(config) {
+  restoreState();
   const tick = async () => {
     try {
       await pollOnce(config);
     } catch (e) {
       console.error('poll error:', e.message);
     }
+    persistState();
     setTimeout(tick, config.pollIntervalSec * 1000);
   };
   tick();
 }
 
-// Pages back through the wallet's signatures until the stored cursor is
-// found, so a burst larger than one page is not silently dropped.
-async function fetchFresh(wallet, newest) {
-  const sigs = [];
-  let before;
-  for (let page = 0; page < MAX_POLL_PAGES; page++) {
-    const batch = await rpc('getSignaturesForAddress', [wallet, { limit: PAGE_LIMIT, before }]);
-    for (const s of batch) {
-      if (s.signature === newest) return { sigs, complete: true };
-      sigs.push(s);
-    }
-    if (batch.length < PAGE_LIMIT) return { sigs, complete: true };
-    before = batch[batch.length - 1].signature;
-  }
-  return { sigs, complete: false };
+function restoreState() {
+  const st = loadState();
+  if (!st) return;
+  for (const [k, v] of Object.entries(st.seenSigs ?? {})) seen.set(k, v);
+  pairs.load(st.pairCounts);
+  loadFunderCache(st.funderCache);
+  loadFunderState(st.funders);
+  console.log(`state restored: ${seen.size} wallet cursor(s) — catching up, not re-baselining`);
+}
+
+function persistState() {
+  saveState({
+    seenSigs: Object.fromEntries(seen),
+    pairCounts: pairs.dump(),
+    funderCache: dumpFunderCache(),
+    funders: dumpFunderState(),
+  });
 }
 
 async function pollOnce(config) {
@@ -106,7 +110,18 @@ async function pollOnce(config) {
       );
     }
 
-    if (config.alerts.sharedFunder) await checkSharedFunder(wallets);
+    if (config.alerts.sharedFunder) {
+      const clusters = await checkSharedFunder(wallets);
+      // A discovered funder becomes a watched address itself: its future
+      // SOL sends are early warnings of new wallets being provisioned.
+      if (config.alerts.funderWatch) {
+        for (const c of clusters) watchFunder(c.funder);
+      }
+    }
+  }
+
+  if (config.alerts.funderWatch) {
+    await pollFunders(new Set(config.wallets));
   }
 }
 

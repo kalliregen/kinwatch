@@ -22,8 +22,13 @@ Kinwatch polls `getSignaturesForAddress` for each watched wallet. The first pass
 2. **Same token.** For events inside a flagged window, Kinwatch fetches the transactions and extracts the token mints they touched (wrapped SOL excluded). Two or more wallets touching the same mint in one window is the classic signature of coordinated trading, and gets its own alert. Transaction lookups are capped per window to bound RPC cost.
 3. **Recurring pairs.** One co-occurrence can be chance. Kinwatch counts how many coordination windows each wallet pair has shared and alerts once when a pair reaches `repeatPairThreshold`.
 4. **Shared funder (kin clusters).** Each wallet's history is walked back to its earliest transaction, and that transaction's fee payer is taken as the funding source. Watched wallets sharing a funding source form a "kin" cluster. The attribution is a heuristic (fee payer of earliest credit) and alerts label it as such; wallets whose history is deeper than the pagination cap resolve to *unknown* rather than guessing.
+5. **Funder watch (early warning).** A funder discovered through a kin cluster becomes a watched address itself. When it sends SOL to a plain wallet Kinwatch has not seen before, that is flagged as a possible new cluster member being provisioned — before the wallet ever trades. Transfers to program-owned accounts (token accounts, pool PDAs) are ignored as the funder's own trading, and each destination is reported once.
 
 All alerts go to Telegram when a bot is configured, otherwise to the console. RPC calls retry with exponential backoff on rate limits, so the default public endpoint works out of the box.
+
+## State
+
+Kinwatch persists its cursors and counters to `data/state.json` after every poll (atomic write, gitignored). A restart resumes from the saved baseline: events that happened while the watcher was down are caught up instead of silently skipped, and pair counters and discovered funders carry over. Delete the file to start fresh.
 
 ## Demo
 
@@ -55,6 +60,7 @@ The demo uses public on-chain data and needs an RPC that serves historical trans
 - `alerts.sameToken`: check flagged windows for same-mint trading
 - `alerts.repeatPairThreshold`: co-occurrence count that flags a recurring pair
 - `alerts.sharedFunder`: trace funding links for wallets in flagged windows
+- `alerts.funderWatch`: watch discovered funders and flag new wallets they provision (needs `sharedFunder`)
 
 `.env`:
 
@@ -69,6 +75,7 @@ Without Telegram credentials, alerts are written to the console.
 - M1: Wallet watcher and Telegram alerts — complete
 - M2: Funding-chain tracing and shared-funder "kin" clusters — complete
 - M3: Expanded coordination heuristics (same-token, recurring pairs), documentation, and demo — complete
+- Beyond the grant scope: funder watch (early warning on newly provisioned wallets) and persistent state across restarts — complete
 
 ## License
 

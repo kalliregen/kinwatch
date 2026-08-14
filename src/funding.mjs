@@ -48,6 +48,8 @@ async function funderFromTx(wallet, signature) {
   return { funder: feePayer, signature };
 }
 
+// Alerts on kin clusters and returns them, so the caller can act on the
+// discovered funders (e.g. hand them to the funder watch).
 export async function checkSharedFunder(wallets) {
   const byFunder = new Map();
   for (const wallet of wallets) {
@@ -61,8 +63,10 @@ export async function checkSharedFunder(wallets) {
     }
   }
 
+  const clusters = [];
   for (const [funder, kin] of byFunder) {
     if (kin.length < 2) continue;
+    clusters.push({ funder, kin });
     const lines = kin.map(w => `  ${short(w)}`).join('\n');
     await sendAlert(
       `👥 kin cluster: ${kin.length} watched wallets share a funding source\n` +
@@ -70,6 +74,15 @@ export async function checkSharedFunder(wallets) {
       `https://solscan.io/account/${funder}`
     );
   }
+  return clusters;
+}
+
+export function dumpFunderCache() {
+  return Object.fromEntries(funderCache);
+}
+
+export function loadFunderCache(obj) {
+  for (const [k, v] of Object.entries(obj ?? {})) funderCache.set(k, v);
 }
 
 const short = (a) => a.slice(0, 4) + '…' + a.slice(-4);

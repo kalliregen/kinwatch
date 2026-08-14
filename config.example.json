@@ -8,6 +8,7 @@
     "newTransaction": true,
     "sharedFunder": true,
     "sameToken": true,
+    "funderWatch": true,
     "coordinatedWindowSec": 120,
     "repeatPairThreshold": 3
   }
