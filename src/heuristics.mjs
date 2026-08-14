@@ -11,14 +11,24 @@ import { rpc } from './rpc.mjs';
 // Mints whose presence in a tx says nothing about which token is traded.
 const WSOL = 'So11111111111111111111111111111111111111112';
 
+// Buffered events are re-analyzed across polls; cache per-signature mints
+// so each transaction is fetched once. Bounded since buffers expire.
+const mintCache = new Map();
+const MINT_CACHE_MAX = 500;
+
 export async function mintsTouched(signature) {
+  if (mintCache.has(signature)) return mintCache.get(signature);
   const tx = await rpc('getTransaction', [signature, {
     encoding: 'jsonParsed',
     maxSupportedTransactionVersion: 0,
   }]);
-  if (!tx?.meta) return [];
-  const balances = [...(tx.meta.preTokenBalances ?? []), ...(tx.meta.postTokenBalances ?? [])];
-  return [...new Set(balances.map((b) => b.mint).filter((m) => m && m !== WSOL))];
+  const balances = tx?.meta
+    ? [...(tx.meta.preTokenBalances ?? []), ...(tx.meta.postTokenBalances ?? [])]
+    : [];
+  const mints = [...new Set(balances.map((b) => b.mint).filter((m) => m && m !== WSOL))];
+  if (mintCache.size >= MINT_CACHE_MAX) mintCache.clear();
+  mintCache.set(signature, mints);
+  return mints;
 }
 
 // events: [{ wallet, signature }]. Returns [{ mint, wallets }] for mints

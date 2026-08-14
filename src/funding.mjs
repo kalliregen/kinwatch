@@ -64,7 +64,6 @@ export async function checkSharedFunder(wallets) {
   for (const [funder, kin] of byFunder) {
     if (kin.length < 2) continue;
     const lines = kin.map(w => `  ${short(w)}`).join('\n');
-    console.log(`kin cluster: ${kin.length} wallets funded by ${short(funder)}`);
     await sendAlert(
       `👥 kin cluster: ${kin.length} watched wallets share a funding source\n` +
       `funder (fee payer of earliest credit): ${short(funder)}\n${lines}\n` +

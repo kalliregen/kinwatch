@@ -1,9 +1,10 @@
-// Telegram alert channel. Silently no-ops when the bot is not configured,
-// so the watcher can run standalone with console output only.
+// Alert channel: every alert goes to the console, and also to Telegram
+// when the bot is configured — so the watcher runs standalone as promised.
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT = process.env.TELEGRAM_CHAT_ID;
 
 export async function sendAlert(text) {
+  console.log(`alert: ${text}`);
   if (!TOKEN || !CHAT) return;
   try {
     const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {

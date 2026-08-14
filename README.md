@@ -18,7 +18,7 @@ Node.js only. No runtime dependencies.
 
 Kinwatch polls `getSignaturesForAddress` for each watched wallet. The first pass records a baseline; after that, every new transaction becomes an event. Four heuristics run on top:
 
-1. **Time window.** Two or more watched wallets active within `coordinatedWindowSec` of each other trigger a coordination alert. This is the base signal — cheap and unconditional.
+1. **Time window.** Two or more watched wallets active within `coordinatedWindowSec` of each other trigger a coordination alert. Events are buffered across polling cycles, so coordination that straddles two polls is still caught; grouping splits on gaps larger than the window, so a chain of close events stays in one group. This is the base signal — cheap and unconditional.
 2. **Same token.** For events inside a flagged window, Kinwatch fetches the transactions and extracts the token mints they touched (wrapped SOL excluded). Two or more wallets touching the same mint in one window is the classic signature of coordinated trading, and gets its own alert. Transaction lookups are capped per window to bound RPC cost.
 3. **Recurring pairs.** One co-occurrence can be chance. Kinwatch counts how many coordination windows each wallet pair has shared and alerts once when a pair reaches `repeatPairThreshold`.
 4. **Shared funder (kin clusters).** Each wallet's history is walked back to its earliest transaction, and that transaction's fee payer is taken as the funding source. Watched wallets sharing a funding source form a "kin" cluster. The attribution is a heuristic (fee payer of earliest credit) and alerts label it as such; wallets whose history is deeper than the pagination cap resolve to *unknown* rather than guessing.

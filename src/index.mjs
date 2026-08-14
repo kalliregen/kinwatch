@@ -17,6 +17,11 @@ if (!config.wallets?.length) {
   process.exit(1);
 }
 
+if (!Number.isFinite(config.pollIntervalSec) || config.pollIntervalSec <= 0) {
+  console.error('config.pollIntervalSec must be a positive number of seconds.');
+  process.exit(1);
+}
+
 console.log(`kinwatch: watching ${config.wallets.length} wallet(s), poll every ${config.pollIntervalSec}s`);
 await sendAlert(`kinwatch started: watching ${config.wallets.length} wallet(s)`);
 startWatch(config);
