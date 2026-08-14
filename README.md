@@ -2,7 +2,7 @@
 
 Kinwatch is a read-only Solana watchdog. It monitors a configured wallet list, detects activity within the same time window, and sends Telegram alerts with transaction links.
 
-The watcher and baseline coordination alerts work now. Funding-chain tracing and broader coordination heuristics are in progress.
+The watcher, baseline coordination alerts and funding-chain tracing work now. Broader coordination heuristics and a demo are in progress.
 
 ## Quickstart
 
@@ -36,7 +36,7 @@ Without Telegram credentials, alerts are written to the console.
 ## Roadmap
 
 - M1: Wallet watcher and Telegram alerts — complete
-- M2: Funding-chain tracing and shared-funder "kin" clusters — in progress
+- M2: Funding-chain tracing and shared-funder "kin" clusters — complete. The funder is attributed as the fee payer of the wallet's earliest credit (a heuristic, labeled as such in alerts); wallets whose history is deeper than the pagination cap resolve to unknown instead of guessing.
 - M3: Expanded coordination heuristics, documentation, and demo — in progress
 
 ## License
