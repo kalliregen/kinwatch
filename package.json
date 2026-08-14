@@ -1,0 +1,14 @@
+{
+  "name": "kinwatch",
+  "version": "0.1.0",
+  "description": "Autonomous agent that watches Solana wallets, traces funding links and flags coordinated activity",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

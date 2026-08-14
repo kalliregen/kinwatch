@@ -1,0 +1,12 @@
+{
+  "wallets": [
+    "PutWalletAddressHere1111111111111111111111111",
+    "PutWalletAddressHere2222222222222222222222222"
+  ],
+  "pollIntervalSec": 30,
+  "alerts": {
+    "newTransaction": true,
+    "sharedFunder": true,
+    "coordinatedWindowSec": 120
+  }
+}
