@@ -48,7 +48,10 @@ export async function pollFunders(knownWallets) {
           try {
             await checkFundingTx(funder, s.signature, knownWallets);
           } catch (e) {
-            console.error(`funding tx check failed for ${s.signature.slice(0, 16)}…:`, e.message);
+            // Same treatment as a budget cut: the cursor stays before this
+            // signature, so it and everything newer retry on the next poll.
+            console.error(`funding tx check failed for ${s.signature.slice(0, 16)}…, deferring:`, e.message);
+            break;
           }
         }
         lastProcessed = s.signature;
